@@ -15,7 +15,7 @@ def make_system_realize_partition_table_changed(target_device):
     """
     utils.print_with_color(_("Making system realize that partition table has changed..."))
 
-    subprocess.run(["blockdev", "--rereadpt", target_device])
+    utils.subProcessRun(["blockdev", "--rereadpt", target_device])
     utils.print_with_color(_("Wait 3 seconds for block device nodes to populate..."))
 
     time.sleep(3)
@@ -35,7 +35,7 @@ def buggy_motherboards_that_ignore_disks_without_boot_flag_toggled(target_device
         _("Applying workaround for buggy motherboards that will ignore disks with no partitions with the boot flag toggled")
     )
 
-    subprocess.run(["parted", "--script",
+    utils.subProcessRun(["parted", "--script",
                     target_device,
                     "set", "1", "boot", "on"])
 
@@ -52,7 +52,7 @@ def support_windows_7_uefi_boot(source_fs_mountpoint, target_fs_mountpoint):
     :param target_fs_mountpoint:
     :return:
     """
-    grep = subprocess.run(["grep", "--extended-regexp", "--quiet", "^MinServer=7[0-9]{3}\.[0-9]",
+    grep = utils.subProcessRun(["grep", "--extended-regexp", "--quiet", "^MinServer=7[0-9]{3}\.[0-9]",
                            source_fs_mountpoint + "/sources/cversion.ini"],
                           stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
     if grep == "" and not os.path.isfile(source_fs_mountpoint + "/bootmgr.efi"):
@@ -62,7 +62,7 @@ def support_windows_7_uefi_boot(source_fs_mountpoint, target_fs_mountpoint):
         _("Source media seems to be Windows 7-based with EFI support, applying workaround to make it support UEFI booting"),
         "yellow")
 
-    test_efi_directory = subprocess.run(["find", target_fs_mountpoint, "-ipath", target_fs_mountpoint + "/efi"],
+    test_efi_directory = utils.subProcessRun(["find", target_fs_mountpoint, "-ipath", target_fs_mountpoint + "/efi"],
                                         stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
 
     if test_efi_directory == "":
@@ -74,7 +74,7 @@ def support_windows_7_uefi_boot(source_fs_mountpoint, target_fs_mountpoint):
         if utils.verbose:
             utils.print_with_color(_("DEBUG: {0} detected.").format(efi_directory), "yellow")
 
-    test_efi_boot_directory = subprocess.run(["find", target_fs_mountpoint, "-ipath", target_fs_mountpoint + "/boot"],
+    test_efi_boot_directory = utils.subProcessRun(["find", target_fs_mountpoint, "-ipath", target_fs_mountpoint + "/boot"],
                                              stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
 
     if test_efi_boot_directory == "":
@@ -87,7 +87,7 @@ def support_windows_7_uefi_boot(source_fs_mountpoint, target_fs_mountpoint):
             utils.print_with_color(_("DEBUG: {0} detected.").format(efi_boot_directory), "yellow")
 
     # If there's already an EFI bootloader existed, skip the workaround
-    test_efi_bootloader = subprocess.run(
+    test_efi_bootloader = utils.subProcessRun(
         ["find", target_fs_mountpoint, "-ipath", target_fs_mountpoint + "/efi/boot/boot*.efi"],
         stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
 
@@ -97,7 +97,7 @@ def support_windows_7_uefi_boot(source_fs_mountpoint, target_fs_mountpoint):
 
     os.makedirs(efi_boot_directory, exist_ok=True)
 
-    bootloader = subprocess.run(["7z",
+    bootloader = utils.subProcessRun(["7z",
                                  "e",
                                  "-so",
                                  source_fs_mountpoint + "/sources/install.wim",

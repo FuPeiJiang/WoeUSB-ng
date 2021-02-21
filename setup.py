@@ -14,7 +14,7 @@ with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 def post_install():
     path = '/usr/local/bin/woeusbgui'  # I give up, I have no clue how to get bin path that is used by pip
-    shutil.copy2(this_directory + '/WoeUSB/woeusbgui', path)  # I'll just hard code it until someone finds better way
+    shutil.copy2(this_directory + '/woeusbgui', path)  # I'll just hard code it until someone finds better way
 
     shutil.copy2(this_directory + '/miscellaneous/com.github.woeusb.woeusb-ng.policy', "/usr/share/polkit-1/actions")
 
@@ -71,7 +71,7 @@ setup(
     packages=['WoeUSB'],
     include_package_data=True,
     scripts=[
-        'WoeUSB/woeusb',
+        '/woeusb',
     ],
     install_requires=[
         'termcolor',

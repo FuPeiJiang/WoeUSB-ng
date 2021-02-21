@@ -8,6 +8,8 @@ from xml.dom.minidom import parseString
 
 import WoeUSB.i18n as i18n
 
+import inspect #for printFunc
+
 _ = i18n.i18n
 
 #: Disable message coloring when set to True, set by --no-color
@@ -22,6 +24,28 @@ except ImportError:
 
 gui = None
 verbose = False
+
+def subProcessRun(cmdAndArgsArr,**kwargs):
+    
+    manualCommand=cmdAndArgsArr[0]
+
+    for arg in cmdAndArgsArr[1:]:
+        #if arg contains space
+        if " " in arg:
+            manualCommand+=' "' + arg + '"'
+        else:
+            manualCommand+=' ' + arg
+    
+    print(manualCommand)
+    return subprocess.run(cmdAndArgsArr,**kwargs)
+
+def printFunc():
+    currentFrame = inspect.currentframe()
+    outerFrames = inspect.getouterframes(currentFrame)
+    parentFrameInfo = outerFrames[1]
+    parentFrame = parentFrameInfo[0]
+    _, _, _, values = inspect.getargvalues(parentFrame)
+    print(parentFrameInfo[3] + str(values)) #foobar{'a': 1, 'b': '2', 'c': [1, 4, 6]}
 
 
 def check_runtime_dependencies(application_name):
@@ -130,7 +154,7 @@ def check_is_target_device_busy(device):
     :param device:
     :return:
     """
-    mount = subprocess.run("mount", stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
+    mount = subProcessRun("mount", stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
     if re.findall(device, mount) != []:
         return 1
     return 0
@@ -192,7 +216,7 @@ def check_target_partition(target_partition, target_device):
     :param target_device: The parent device of the target partition, this is passed in to check UEFI:NTFS filesystem's existence on check_uefi_ntfs_support_partition
     :return:
     """
-    target_filesystem = subprocess.run(["lsblk",
+    target_filesystem = subProcessRun(["lsblk",
                                         "--output", "FSTYPE",
                                         "--noheadings",
                                         target_partition], stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
@@ -216,7 +240,7 @@ def check_uefi_ntfs_support_partition(target_device):
     :param target_device: The UEFI:NTFS partition residing entier device file
     :return:
     """
-    lsblk = subprocess.run(["lsblk",
+    lsblk = subProcessRun(["lsblk",
                             "--output", "LABEL",
                             "--noheadings",
                             target_device], stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
@@ -236,7 +260,7 @@ def check_target_filesystem_free_space(target_fs_mountpoint, source_fs_mountpoin
     :param target_partition:
     :return:
     """
-    df = subprocess.run(["df",
+    df = subProcessRun(["df",
                          "--block-size=1",
                          target_fs_mountpoint], stdout=subprocess.PIPE).stdout
     # free_space = int(df.strip().split()[4])

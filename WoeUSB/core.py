@@ -55,6 +55,8 @@ def init(from_cli=True, install_mode=None, source_media=None, target_media=None,
     :param filesystem_label:
     :return: List
     """
+    utils.printFunc()
+    
     source_fs_mountpoint = "/media/woeusb_source_" + str(
         round((datetime.today() - datetime.fromtimestamp(0)).total_seconds())) + "_" + str(os.getpid())
     target_fs_mountpoint = "/media/woeusb_target_" + str(
@@ -128,6 +130,8 @@ def main(source_fs_mountpoint, target_fs_mountpoint, source_media, target_media,
     :param workaround_bios_boot_flag:
     :return: 0 - succes; 1 - failure
     """
+    utils.printFunc()
+
     global debug
     global verbose
     global no_color
@@ -176,8 +180,8 @@ def main(source_fs_mountpoint, target_fs_mountpoint, source_media, target_media,
                                 command_mkntfs)
 
         if target_filesystem_type == "NTFS":
-            create_uefi_ntfs_support_partition(target_device)
-            install_uefi_ntfs_support_partition(target_device + "2", temp_directory)
+            create_uefi_ntfs_support_partition(target_device,target_device + "2",command_mkdosfs)
+            # install_uefi_ntfs_support_partition(target_device + "2", temp_directory)
 
     if install_mode == "partition":
         utils.check_target_partition(target_partition, target_device)
@@ -192,7 +196,11 @@ def main(source_fs_mountpoint, target_fs_mountpoint, source_media, target_media,
 
     current_state = "copying-filesystem"
 
-    copy_filesystem_files(source_fs_mountpoint, target_fs_mountpoint)
+    # copy_filesystem_files(source_fs_mountpoint, target_fs_mountpoint)
+    # utils.subProcessRun(['rsync', '-avu', source_fs_mountpoint + '/', target_fs_mountpoint])
+    utils.subProcessRun(['rsync', '-au', '--info=progress2', source_fs_mountpoint + '/', target_fs_mountpoint])
+    
+    # return 0
 
     workaround.support_windows_7_uefi_boot(source_fs_mountpoint, target_fs_mountpoint)
 
@@ -209,6 +217,8 @@ def main(source_fs_mountpoint, target_fs_mountpoint, source_media, target_media,
 
 
 def print_application_info():
+    utils.printFunc()
+
     utils.print_with_color(application_name + " " + application_version)
     utils.print_with_color(application_site_url)
     utils.print_with_color(application_copyright_declaration)
@@ -220,8 +230,10 @@ def wipe_existing_partition_table_and_filesystem_signatures(target_device):
     :param target_device:
     :return: None
     """
+    utils.printFunc()
+
     utils.print_with_color(_("Wiping all existing partition table and filesystem signatures in {0}").format(target_device), "green")
-    subprocess.run(["wipefs", "--all", target_device])
+    utils.subProcessRun(["wipefs", "--all", target_device])
     check_if_the_drive_is_really_wiped(target_device)
 
 
@@ -232,11 +244,13 @@ def check_if_the_drive_is_really_wiped(target_device):
     :param target_device: The target device file to be checked
     :return: 0 - success; 1 - failure
     """
+    utils.printFunc()
+
     utils.check_kill_signal()
 
     utils.print_with_color(_("Ensure that {0} is really wiped...").format(target_device))
 
-    lsblk = subprocess.run(["lsblk", "--pairs", "--output", "NAME,TYPE", target_device], stdout=subprocess.PIPE).stdout
+    lsblk = utils.subProcessRun(["lsblk", "--pairs", "--output", "NAME,TYPE", target_device], stdout=subprocess.PIPE).stdout
 
     grep = subprocess.Popen(["grep", "--count", "TYPE=\"part\""], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     if grep.communicate(input=lsblk)[0].decode("utf-8").strip() != "0":
@@ -253,6 +267,8 @@ def create_target_partition_table(target_device, partition_table_type):
     :param partition_table_type:
     :return: 0 - success; 1 - failure
     """
+    utils.printFunc()
+
     utils.check_kill_signal()
 
     utils.print_with_color(_("Creating new partition table on {0}...").format(target_device), "green")
@@ -267,7 +283,7 @@ def create_target_partition_table(target_device, partition_table_type):
         return 1
 
     # Create partition table(and overwrite the old one, whatever it was)
-    subprocess.run(["parted", "--script", target_device, "mklabel", parted_partiton_table_argument])
+    utils.subProcessRun(["parted", "--script", target_device, "mklabel", parted_partiton_table_argument])
 
     return 0
 
@@ -283,6 +299,8 @@ def create_target_partition(target_device, target_partition, filesystem_type, fi
     :param command_mkntfs:
     :return: 1,2 - failure
     """
+    utils.printFunc()
+
     utils.check_kill_signal()
 
     if filesystem_type in ["FAT", "vfat"]:
@@ -302,26 +320,27 @@ def create_target_partition(target_device, target_partition, filesystem_type, fi
     # If NTFS filesystem is used we leave a 512KiB partition
     # at the end for installing UEFI:NTFS partition for NTFS support
     if parted_mkpart_fs_type == "fat32":
-        subprocess.run(["parted",
+        utils.subProcessRun(["parted",
                         "--script",
                         target_device,
                         "mkpart",
                         "primary",
                         parted_mkpart_fs_type,
-                        "4MiB",
+                        "4MiB", #start
                         "100%"])  # last sector of the disk
     elif parted_mkpart_fs_type == "ntfs":
         # Major partition for storing user files
         # NOTE: Microsoft Windows has a bug that only recognize the first partition for removable storage devices, that's why this partition should always be the first one
-        subprocess.run(["parted",
+        utils.subProcessRun(["parted",
                         "--script",
                         target_device,
                         "mkpart",
                         "primary",
                         parted_mkpart_fs_type,
-                        "4MiB",
-                        "--",
-                        "-1025s"])  # Leave 512KiB==1024sector in traditional 512bytes/sector disk, disks with sector with more than 512bytes only result in partition size greater than 512KiB and is intentionally let-it-be.
+                        "4MiB", #Free Space 4.2MB Before NTFS, 524KB FAT after NTFS
+                        "--", # WHAT IS THIS FOR ?? oh for the minus (-) do you really need this ?
+                        "-2049s"])  # Leave 512KiB==1024sector in traditional 512bytes/sector disk, disks with sector with more than 512bytes only result in partition size greater than 512KiB and is intentionally let-it-be.
+                        # "-1025s"])  # Leave 512KiB==1024sector in traditional 512bytes/sector disk, disks with sector with more than 512bytes only result in partition size greater than 512KiB and is intentionally let-it-be.
     # FIXME: Leave exact 512KiB in all circumstances is better, but the algorithm to do so is quite brainkilling.
     else:
         utils.print_with_color(_("FATAL: Illegal {0}, please report bug.").format(parted_mkpart_fs_type), "red")
@@ -330,34 +349,40 @@ def create_target_partition(target_device, target_partition, filesystem_type, fi
 
     workaround.make_system_realize_partition_table_changed(target_device)
 
+    ## why Format if it's already NTFS ?
     # Format target partition's filesystem
     if filesystem_type in ["FAT", "vfat"]:
-        subprocess.run([command_mkdosfs, "-F", "32", target_partition])
+        utils.subProcessRun([command_mkdosfs, "-F", "32", target_partition])
     elif filesystem_type in ["NTFS", "ntfs"]:
-        subprocess.run([command_mkntfs, "--quick", "--label", filesystem_label, target_partition])
+        utils.subProcessRun([command_mkntfs, "--quick", "--label", filesystem_label, target_partition])
     else:
         utils.print_with_color(_("FATAL: Shouldn't be here"), "red")
         return 1
 
 
-def create_uefi_ntfs_support_partition(target_device):
+def create_uefi_ntfs_support_partition(target_device,uefi_ntfs_partition,command_mkdosfs):
     """
     :param target_device:
     :return: None
     """
     utils.check_kill_signal()
 
+    utils.printFunc()
+
     # FIXME: The partition type should be `fat12` but `fat12` isn't recognized by Parted...
     # NOTE: The --align is set to none because this partition is indeed misaligned, but ignored due to it's small size
 
-    subprocess.run(["parted",
-                    "--align", "none",
+    utils.subProcessRun(["parted",
+                    # "--align", "none",
                     "--script",
                     target_device,
                     "mkpart",
                     "primary",
                     "fat16",
-                    "--", "-1024s", "-1s"])
+                    "--", "-2048s", "-1s"]) #what does this -1s do ? -0s is not the end, -1s is actually the end
+                    # "--", "-1024s", "-1s"]) #what does this -1s do ? -0s is not the end, -1s is actually the end
+
+    # utils.subProcessRun([command_mkdosfs, "-F", "12", uefi_ntfs_partition])
 
 
 def install_uefi_ntfs_support_partition(uefi_ntfs_partition, download_directory):
@@ -370,18 +395,23 @@ def install_uefi_ntfs_support_partition(uefi_ntfs_partition, download_directory)
     :param download_directory: The temporary directory for downloading UEFI:NTFS image from GitHub
     :return: 1 - failure
     """
+    utils.printFunc()
+
     utils.check_kill_signal()
 
     try:
-        file = urllib.request.urlretrieve("https://github.com/pbatard/rufus/raw/master/res/uefi/", "uefi-ntfs.img")[0]
+        #fixed, now it actually downlads the file
+        file = urllib.request.urlretrieve("https://github.com/pbatard/rufus/raw/master/res/uefi/uefi-ntfs.img", "uefi-ntfs.img")[0]
     except (urllib.error.ContentTooShortError, urllib.error.HTTPError, urllib.error.URLError):
         utils.print_with_color(
             _("Warning: Unable to download UEFI:NTFS partition image from GitHub, installation skipped.  Target device might not be bootable if the UEFI firmware doesn't support NTFS filesystem."), "yellow")
         return 1
 
     shutil.move(file, download_directory + "/" + file)  # move file to download_directory
-
+    # install_uefi_ntfs_support_partition{'uefi_ntfs_partition': '/dev/sdd2', 'download_directory': '/tmp/WoeUSB.d107ks7_'}
     shutil.copy2(download_directory + "/uefi-ntfs.img", uefi_ntfs_partition)
+    # /tmp/WoeUSB.d107ks7_ /dev/sdd2
+    # utils.subProcessRun(["dd", "if=" + download_directory + "/uefi-ntfs.img", "of=" + uefi_ntfs_partition])
 
 
 def mount_source_filesystem(source_media, source_fs_mountpoint):
@@ -390,18 +420,20 @@ def mount_source_filesystem(source_media, source_fs_mountpoint):
     :param source_fs_mountpoint:
     :return: 1 - failure
     """
+    utils.printFunc()
+
     utils.check_kill_signal()
 
     utils.print_with_color(_("Mounting source filesystem..."), "green")
 
     # os.makedirs(source_fs_mountpoint, exist_ok=True)
 
-    if subprocess.run(["mkdir", "--parents", source_fs_mountpoint]).returncode != 0:
+    if utils.subProcessRun(["mkdir", "--parents", source_fs_mountpoint]).returncode != 0:
         utils.print_with_color(_("Error: Unable to create {0} mountpoint directory").format(source_fs_mountpoint), "red")
         return 1
 
     if os.path.isfile(source_media):
-        if subprocess.run(["mount",
+        if utils.subProcessRun(["mount",
                            "--options", "loop,ro",
                            "--types", "udf,iso9660",
                            source_media,
@@ -409,7 +441,7 @@ def mount_source_filesystem(source_media, source_fs_mountpoint):
             utils.print_with_color(_("Error: Unable to mount source media"), "red")
             return 1
     else:
-        if subprocess.run(["mount",
+        if utils.subProcessRun(["mount",
                            "--options", "ro",
                            source_media,
                            source_fs_mountpoint]).returncode != 0:
@@ -425,17 +457,19 @@ def mount_target_filesystem(target_partition, target_fs_mountpoint):
     :param target_fs_mountpoint: The existing directory used as the target filesystem's mountpoint, for example /mnt/target_filesystem
     :return: 1 - failure
     """
+    utils.printFunc()
+
     utils.check_kill_signal()
 
     utils.print_with_color(_("Mounting target filesystem..."), "green")
 
     # os.makedirs(target_fs_mountpoint, exist_ok=True)
 
-    if subprocess.run(["mkdir", "--parents", target_fs_mountpoint]).returncode != 0:
+    if utils.subProcessRun(["mkdir", "--parents", target_fs_mountpoint]).returncode != 0:
         utils.print_with_color(_("Error: Unable to create {0} mountpoint directory").format(target_fs_mountpoint), "red")
         return 1
 
-    if subprocess.run(["mount",
+    if utils.subProcessRun(["mount",
                        target_partition,
                        target_fs_mountpoint]).returncode != 0:
         utils.print_with_color(_("Error: Unable to mount target media"), "red")
@@ -450,15 +484,17 @@ def copy_filesystem_files(source_fs_mountpoint, target_fs_mountpoint):
     :param target_fs_mountpoint:
     :return: None
     """
+    utils.printFunc()
+
     global CopyFiles_handle
 
     utils.check_kill_signal()
 
-    total_size = 0
-    for dirpath, dirnames, filenames in os.walk(source_fs_mountpoint):
-        for file in filenames:
-            path = os.path.join(dirpath, file)
-            total_size += os.path.getsize(path)
+    # total_size = 0
+    # for dirpath, dirnames, filenames in os.walk(source_fs_mountpoint):
+    #     for file in filenames:
+    #         path = os.path.join(dirpath, file)
+    #         total_size += os.path.getsize(path)
 
     utils.print_with_color(_("Copying files from source media..."), "green")
 
@@ -493,6 +529,8 @@ def copy_large_file(source, target):
     :param target:
     :return: None
     """
+    utils.printFunc()
+
     source_file = open(source, "rb")  # Open for reading in byte mode
     target_file = open(target, "wb")  # Open for writing in byte mode
 
@@ -516,11 +554,13 @@ def install_legacy_pc_bootloader_grub(target_fs_mountpoint, target_device, comma
     :param command_grubinstall:
     :return: None
     """
+    utils.printFunc()
+
     utils.check_kill_signal()
 
     utils.print_with_color(_("Installing GRUB bootloader for legacy PC booting support..."), "green")
 
-    subprocess.run([command_grubinstall,
+    utils.subProcessRun([command_grubinstall,
                     "--target=i386-pc",
                     "--boot-directory=" + target_fs_mountpoint,
                     "--force", target_device])
@@ -537,6 +577,8 @@ def install_legacy_pc_bootloader_grub_config(target_fs_mountpoint, target_device
     :param name_grub_prefix: May be different between distributions, so need to be specified (grub/grub2)
     :return: None
     """
+    utils.printFunc()
+
     utils.check_kill_signal()
 
     utils.print_with_color(_("Installing custom GRUB config for legacy PC booting..."), "green")
@@ -557,9 +599,11 @@ def cleanup_mountpoint(fs_mountpoint):
     :param fs_mountpoint:
     :return: unclean(2): Not fully clean, target device can be safely detach from host; unsafe(3): Target device cannot be safely detach from host
     """
+    utils.printFunc()
+
     if os.path.ismount(fs_mountpoint):  # os.path.ismount() checks if path is a mount point
         utils.print_with_color(_("Unmounting and removing {0}...").format(fs_mountpoint), "green")
-        if subprocess.run(["umount", fs_mountpoint]).returncode:
+        if utils.subProcessRun(["umount", fs_mountpoint]).returncode:
             utils.print_with_color(_("Warning: Unable to unmount filesystem."), "yellow")
             return 1
 
@@ -579,6 +623,8 @@ def cleanup(source_fs_mountpoint, target_fs_mountpoint, temp_directory):
     :param temp_directory:
     :return: None
     """
+    utils.printFunc()
+
     if CopyFiles_handle.is_alive():
         CopyFiles_handle.stop = True
 
@@ -626,6 +672,8 @@ def setup_arguments():
     """
     :return: Setted up argparse.ArgumentParser object
     """
+    utils.printFunc()
+
     parser = argparse.ArgumentParser(
         description="WoeUSB can create a bootable Microsoft Windows(R) USB storage device from an existing Windows optical disk or an ISO disk image.")
     parser.add_argument("source", help="Source")
@@ -704,6 +752,8 @@ class ReportCopyProgress(threading.Thread):
 
 
 def run():
+    utils.printFunc()
+
     result = init()
     if isinstance(result, list) is False:
         return

@@ -3,12 +3,12 @@
 import os
 import re
 import subprocess
-
+import WoeUSB.utils as utils
 
 def usb_drive(show_all=False):
     devices_list = []
 
-    lsblk = subprocess.run(["lsblk",
+    lsblk = utils.subProcessRun(["lsblk",
                             "--output", "NAME",
                             "--noheadings",
                             "--nodeps"], stdout=subprocess.PIPE).stdout.decode("utf-8")
@@ -23,13 +23,13 @@ def usb_drive(show_all=False):
         # FIXME: Needs a more reliable detection mechanism instead of simply assuming it is under /dev
         block_device = "/dev/" + device
 
-        device_capacity = subprocess.run(["lsblk",
+        device_capacity = utils.subProcessRun(["lsblk",
                                           "--output", "SIZE",
                                           "--noheadings",
                                           "--nodeps",
                                           block_device], stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
 
-        device_model = subprocess.run(["lsblk",
+        device_model = utils.subProcessRun(["lsblk",
                                        "--output", "MODEL",
                                        "--noheadings",
                                        "--nodeps",
@@ -64,7 +64,7 @@ def is_removable_and_writable_device(block_device_name):
 
 def dvd_drive():
     devices_list = []
-    find = subprocess.run(["find", "/sys/block",
+    find = utils.subProcessRun(["find", "/sys/block",
                            "-maxdepth", "1",
                            "-mindepth", "1"], stdout=subprocess.PIPE).stdout.decode("utf-8").split()
     devices = []
